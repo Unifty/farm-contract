@@ -1463,13 +1463,10 @@ contract ERC1155Tradable is ERC1155, ERC1155MintBurn, ERC1155Metadata, Ownable, 
 		    uris[_id] = _uri;
 			emit URI(_uri, _id);
 		}
-		else{
-		    emit URI(string(abi.encodePacked(baseMetadataURI, _uint2str(_id), ".json")), _id);
-		}
 
-		if (_initialSupply != 0) _mint(msg.sender, _id, _initialSupply, _data);
 		tokenSupply[_id] = _initialSupply;
 		tokenMaxSupply[_id] = _maxSupply;
+		if (_initialSupply != 0) _mint(msg.sender, _id, _initialSupply, _data);
 		return _id;
 	}
 
@@ -1477,9 +1474,6 @@ contract ERC1155Tradable is ERC1155, ERC1155MintBurn, ERC1155Metadata, Ownable, 
 	    if (bytes(_uri).length > 0) {
 		    uris[_id] = _uri;
 			emit URI(_uri, _id);
-		}
-		else{
-		    emit URI(string(abi.encodePacked(baseMetadataURI, _uint2str(_id), ".json")), _id);
 		}
 	}
 
@@ -1507,8 +1501,8 @@ contract ERC1155Tradable is ERC1155, ERC1155MintBurn, ERC1155Metadata, Ownable, 
 	) public onlyMinter {
 		uint256 tokenId = _id;
 		require(tokenSupply[tokenId].add(_quantity) <= tokenMaxSupply[tokenId], "Max supply reached");
-		_mint(msg.sender, _id, _quantity, _data);
 		tokenSupply[_id] = tokenSupply[_id].add(_quantity);
+		_mint(msg.sender, _id, _quantity, _data);
 	}
 
 	/**
@@ -1830,7 +1824,7 @@ contract UniftyFarm is Wrap, Ownable, Pausable, CloneFactory, WhitelistAdminRole
 
 	function stake(uint256 amount) public updateReward(msg.sender) whenNotPaused() {
 		require(block.timestamp >= periodStart, "Pool not open");
-		require(amount.add(balanceOf(msg.sender)) >= minStake && amount.add(balanceOf(msg.sender)) > 0, "Too few deposit");
+		require(amount.add(balanceOf(msg.sender)) >= minStake, "Too few deposit");
 		require(amount.add(balanceOf(msg.sender)) <= maxStake, "Deposit limit reached");
 
 		super.stake(amount);
@@ -1860,7 +1854,7 @@ contract UniftyFarm is Wrap, Ownable, Pausable, CloneFactory, WhitelistAdminRole
 
         if(!isCloned){
             uint256 nifBalance = IERC20(address(0x7e291890B01E5181f7ecC98D79ffBe12Ad23df9e)).balanceOf(msg.sender);
-            if(nifBalance >= farmFeeMinimumNif || iHaveAnyWildcard()){
+            if(nifBalance >= farmFeeMinimumNif || needsPayment()){
                 enableFees = false;
                 fees = 0;
             }
@@ -2059,6 +2053,8 @@ contract UniftyFarm is Wrap, Ownable, Pausable, CloneFactory, WhitelistAdminRole
 	    require(!constructed && !isCloned, "UniftyFarm must not be constructed yet or cloned.");
 	    require(_minStake >= 0 && _maxStake > 0 && _maxStake >= _minStake, "Problem with min and max stake setup");
 
+        isCloned = true;
+
 	    rewardRate = 86400;
 
 	    periodStart = _periodStart;
@@ -2087,7 +2083,7 @@ contract UniftyFarm is Wrap, Ownable, Pausable, CloneFactory, WhitelistAdminRole
 	    require(!isCloned, "Not callable from clone");
 
 	    uint256 nifBalance = IERC20(address(0x7e291890B01E5181f7ecC98D79ffBe12Ad23df9e)).balanceOf(msg.sender);
-	    if(nifBalance < farmFeeMinimumNif && !iHaveAnyWildcard()){
+	    if(nifBalance < farmFeeMinimumNif && !needsPayment()){
 	        require(msg.value == farmFee, "Invalid farm fee");
 	    }
 
@@ -2104,15 +2100,19 @@ contract UniftyFarm is Wrap, Ownable, Pausable, CloneFactory, WhitelistAdminRole
 	    farms[msg.sender].push(clone);
 
 	    // enough NIF or a wildcard? then there won't be no fee
-	    if(nifBalance < farmFeeMinimumNif && !iHaveAnyWildcard()){
+	    if(nifBalance < farmFeeMinimumNif && !needsPayment()){
 	        feeAddress.transfer(msg.value);
 	    }
 
-	    emit FarmCreated(msg.sender, clone, nifBalance < farmFeeMinimumNif && !iHaveAnyWildcard() ? farmFee : 0, _uri);
+	    emit FarmCreated(msg.sender, clone, nifBalance < farmFeeMinimumNif && !needsPayment() ? farmFee : 0, _uri);
 	    emit FarmUri(clone, _uri);
 	}
 
-	function iHaveAnyWildcard() public view returns (bool){
+    /**
+    * Checks whether the msg.sender has any of the specified wildcard addresses
+    * which are meant to allow a user to not pay for fees when interacting with the protocol.
+    */
+	function needsPayment() public view returns (bool){
 	    for(uint256 i = 0; i < wildcards.length; i++){
 	        if(wildcardErc1155Address.balanceOf(msg.sender, wildcards[i]) > 0){
 	            return true;
