@@ -1794,21 +1794,14 @@ contract UniftyFarm is Wrap, Ownable, Pausable, CloneFactory, WhitelistAdminRole
 
 	function earned(address account) public view returns (uint256) {
 
-		uint256 decimals = DetailedERC20(address(token)).decimals();
-		uint256 pow = 1;
-
-        for(uint256 i = 0; i < decimals; i++){
-            pow = pow.mul(10);
-        }
-
 		return points[account].add(
-		    getCurrPoints(account, pow)
+		    getCurrPoints(account)
 	    );
 	}
 
-	function getCurrPoints(address account, uint256 pow) internal view returns(uint256){
+	function getCurrPoints(address account) internal view returns(uint256){
 	    uint256 blockTime = block.timestamp;
-	    return blockTime.sub(lastUpdateTime[account]).mul(pow).div(rewardRate).mul(balanceOf(account)).div(pow);
+	    return blockTime.sub(lastUpdateTime[account]).mul(balanceOf(account)).div(rewardRate);
 	}
 
 	function setRewardRate(uint256 _rewardRate) external onlyWhitelistAdmin{
